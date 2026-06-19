@@ -17,6 +17,7 @@ declare module "fastify" {
       jwtSecret: string;
       jwtExpiresIn: string;
       authCookieName: string;
+      databaseSslRejectUnauthorized: boolean;
     };
     prisma: PrismaClient;
     redis: Redis;

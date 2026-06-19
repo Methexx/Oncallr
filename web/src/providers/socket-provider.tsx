@@ -14,6 +14,7 @@ export function SocketProvider({
 }: SocketProviderProps) {
   useEffect(() => {
     if (!autoConnect) {
+      socket.disconnect();
       return;
     }
 

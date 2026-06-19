@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { startTransition, useEffect, useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,7 +17,12 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
-import { getMyIncidents } from "@/services/incidents";
+import { useSocket } from "@/hooks/use-socket";
+import {
+  acknowledgeIncident,
+  getMyIncidents,
+} from "@/services/incidents";
+import { IncidentNotificationPayload } from "@/types/incident";
 
 function formatSeverity(severity: string) {
   return severity.charAt(0) + severity.slice(1).toLowerCase();
@@ -23,6 +30,8 @@ function formatSeverity(severity: string) {
 
 export function DashboardOverview() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const socket = useSocket();
   const auth = useAuth();
   const incidentsQuery = useQuery({
     queryKey: ["incidents", "my"],
@@ -32,12 +41,60 @@ export function DashboardOverview() {
   });
 
   const incidentsError = incidentsQuery.error as AxiosError | null;
+  const isAuthenticated = auth.isAuthenticated;
+  const acknowledgeMutation = useMutation({
+    mutationFn: acknowledgeIncident,
+    onSuccess: () => {
+      toast.success("Incident acknowledged.");
+      void queryClient.invalidateQueries({
+        queryKey: ["incidents", "my"],
+      });
+    },
+    onError: (error) => {
+      const message =
+        error instanceof AxiosError
+          ? error.response?.data?.message ?? "Unable to acknowledge incident."
+          : "Unable to acknowledge incident.";
+
+      toast.error(message);
+    },
+  });
+
+  const handleIncidentCreated = useEffectEvent(
+    (payload: IncidentNotificationPayload) => {
+      toast.info(`New ${payload.severity.toLowerCase()} incident for ${payload.serviceName}.`, {
+        description: payload.title,
+      });
+
+      startTransition(() => {
+        void queryClient.invalidateQueries({
+          queryKey: ["incidents", "my"],
+        });
+      });
+    }
+  );
 
   useEffect(() => {
     if (auth.isUnauthorized || incidentsError?.response?.status === 401) {
       router.replace("/login");
     }
   }, [auth.isUnauthorized, incidentsError, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const onIncidentCreated = (payload: IncidentNotificationPayload) => {
+      handleIncidentCreated(payload);
+    };
+
+    socket.on("incident:new", onIncidentCreated);
+
+    return () => {
+      socket.off("incident:new", onIncidentCreated);
+    };
+  }, [isAuthenticated, socket]);
 
   if (auth.isLoading) {
     return (
@@ -123,13 +180,35 @@ export function DashboardOverview() {
                   className="rounded-lg border border-border bg-background p-4"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{incident.title}</p>
+                    <Link
+                      className="font-medium underline-offset-4 hover:underline"
+                      href={`/incidents/${incident.id}`}
+                    >
+                      {incident.title}
+                    </Link>
                     <Badge>{formatSeverity(incident.severity)}</Badge>
                     <Badge variant="outline">{incident.status}</Badge>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {incident.service?.name ?? "Unknown service"}
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      disabled={
+                        acknowledgeMutation.isPending ||
+                        incident.status !== "TRIGGERED"
+                      }
+                      onClick={() => acknowledgeMutation.mutate(incident.id)}
+                      size="sm"
+                      type="button"
+                    >
+                      {acknowledgeMutation.isPending
+                        ? "Acknowledging..."
+                        : incident.status === "ACKNOWLEDGED"
+                          ? "Acknowledged"
+                          : "Acknowledge"}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

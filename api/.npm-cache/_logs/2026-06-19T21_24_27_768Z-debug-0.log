@@ -1,0 +1,69 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.11.1
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\Methum-PC\OneDrive\Desktop\Oncallr\api\.npmrc
+5 silly config load:file:C:\Users\Methum-PC\.npmrc
+6 silly config load:file:C:\Users\Methum-PC\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install @prisma/adapter-pg pg
+8 verbose argv "install" "@prisma/adapter-pg" "pg" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:C:\Users\Methum-PC\OneDrive\Desktop\Oncallr\api\.npm-cache\_logs\2026-06-19T21_24_27_768Z-
+10 verbose logfile C:\Users\Methum-PC\OneDrive\Desktop\Oncallr\api\.npm-cache\_logs\2026-06-19T21_24_27_768Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 verbose shrinkwrap failed to load node_modules/.package-lock.json out of date, updated: node_modules
+14 silly idealTree buildDeps
+15 silly fetch manifest @prisma/adapter-pg@*
+16 silly packumentCache full:https://registry.npmjs.org/@prisma%2fadapter-pg cache-miss
+17 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with EACCES
+18 http fetch GET https://registry.npmjs.org/@prisma%2fadapter-pg attempt 1 failed with EACCES
+19 http fetch GET https://registry.npmjs.org/npm attempt 2 failed with EACCES
+20 http fetch GET https://registry.npmjs.org/@prisma%2fadapter-pg attempt 2 failed with EACCES
+21 http fetch GET https://registry.npmjs.org/npm attempt 3 failed with EACCES
+22 http fetch GET https://registry.npmjs.org/@prisma%2fadapter-pg attempt 3 failed with EACCES
+23 silly fetch manifest pg@*
+24 silly packumentCache full:https://registry.npmjs.org/pg cache-miss
+25 http fetch GET https://registry.npmjs.org/pg attempt 1 failed with EACCES
+26 http fetch GET https://registry.npmjs.org/pg attempt 2 failed with EACCES
+27 http fetch GET https://registry.npmjs.org/pg attempt 3 failed with EACCES
+28 silly placeDep ROOT @prisma/adapter-pg@ OK for: api@0.1.0 want: *
+29 silly placeDep ROOT pg@ OK for: api@0.1.0 want: *
+30 verbose type system
+31 verbose stack FetchError: request to https://registry.npmjs.org/@prisma%2fadapter-pg failed, reason: 
+31 verbose stack     at ClientRequest.<anonymous> (C:\Program Files\nodejs\node_modules\npm\node_modules\minipass-fetch\lib\index.js:130:14)
+31 verbose stack     at ClientRequest.emit (node:events:508:28)
+31 verbose stack     at emitErrorEvent (node:_http_client:108:11)
+31 verbose stack     at _destroy (node:_http_client:962:9)
+31 verbose stack     at onSocketNT (node:_http_client:982:5)
+31 verbose stack     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+32 error code EACCES
+33 error errno EACCES
+34 error FetchError: request to https://registry.npmjs.org/@prisma%2fadapter-pg failed, reason: 
+34 error     at ClientRequest.<anonymous> (C:\Program Files\nodejs\node_modules\npm\node_modules\minipass-fetch\lib\index.js:130:14)
+34 error     at ClientRequest.emit (node:events:508:28)
+34 error     at emitErrorEvent (node:_http_client:108:11)
+34 error     at _destroy (node:_http_client:962:9)
+34 error     at onSocketNT (node:_http_client:982:5)
+34 error     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+34 error   code: 'EACCES',
+34 error   errno: 'EACCES',
+34 error   type: 'system',
+34 error   requiredBy: '.'
+34 error }
+35 error
+35 error The operation was rejected by your operating system.
+35 error It's possible that the file was already in use (by a text editor or antivirus),
+35 error or that you lack permissions to access it.
+35 error
+35 error If you believe this might be a permissions issue, please double-check the
+35 error permissions of the file and its containing directories, or try running
+35 error the command again as root/Administrator.
+36 silly unfinished npm timer reify 1781904268885
+37 silly unfinished npm timer reify:loadTrees 1781904268887
+38 verbose cwd C:\Users\Methum-PC\OneDrive\Desktop\Oncallr\api
+39 verbose os Windows_NT 10.0.26200
+40 verbose node v24.11.1
+41 verbose npm  v11.6.2
+42 verbose exit 1
+43 verbose code 1
+44 error A complete log of this run can be found in: C:\Users\Methum-PC\OneDrive\Desktop\Oncallr\api\.npm-cache\_logs\2026-06-19T21_24_27_768Z-debug-0.log

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
   EscalationTargetType,
   IncidentSeverity,
@@ -8,7 +9,22 @@ import {
   UserRole,
 } from "@prisma/client";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg(
+  {
+    connectionString: process.env.DATABASE_URL!,
+    ssl: {
+      rejectUnauthorized:
+        process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true",
+    },
+  },
+  {
+    schema: "public",
+  }
+);
+
+const prisma = new PrismaClient({
+  adapter,
+});
 
 async function main() {
   const passwordHash = await hash("password123", 10);

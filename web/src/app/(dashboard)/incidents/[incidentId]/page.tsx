@@ -1,3 +1,5 @@
+import { IncidentDetailView } from "@/features/incidents/incident-detail-view";
+
 interface IncidentDetailsPageProps {
   params: Promise<{
     incidentId: string;
@@ -9,9 +11,5 @@ export default async function IncidentDetailsPage({
 }: IncidentDetailsPageProps) {
   const { incidentId } = await params;
 
-  return (
-    <section className="text-sm text-muted-foreground">
-      Incident details page for {incidentId}
-    </section>
-  );
+  return <IncidentDetailView incidentId={incidentId} />;
 }

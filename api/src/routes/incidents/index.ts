@@ -1,4 +1,4 @@
-import { IncidentStatus } from "@prisma/client";
+import { IncidentEventType, IncidentStatus, UserRole } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { cancelEscalationCheck } from "../../services/escalation-service";
@@ -7,6 +7,30 @@ import { AuthTokenPayload } from "../../types/auth";
 const incidentParamsSchema = z.object({
   incidentId: z.string().uuid(),
 });
+
+const incidentCommentSchema = z.object({
+  message: z.string().trim().min(1).max(5_000),
+});
+
+const incidentResolveSchema = z.object({
+  resolutionNote: z.string().trim().max(5_000).optional(),
+});
+
+function canManageIncident(
+  authUser: AuthTokenPayload,
+  incident: {
+    currentAssigneeId: string | null;
+    acknowledgedById: string | null;
+    resolvedById: string | null;
+  }
+) {
+  return (
+    authUser.role === UserRole.ADMIN ||
+    incident.currentAssigneeId === authUser.sub ||
+    incident.acknowledgedById === authUser.sub ||
+    incident.resolvedById === authUser.sub
+  );
+}
 
 export const incidentRoutes: FastifyPluginAsync = async (app) => {
   app.get(
@@ -34,6 +58,81 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  app.get(
+    "/:incidentId",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+      const { incidentId } = incidentParamsSchema.parse(request.params);
+
+      const incident = await app.prisma.incident.findUnique({
+        where: {
+          id: incidentId,
+        },
+        include: {
+          service: true,
+          currentAssignee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          acknowledgedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          resolvedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          events: {
+            include: {
+              actor: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
+      });
+
+      if (!incident) {
+        return reply.code(404).send({
+          message: "Incident not found.",
+        });
+      }
+
+      if (!canManageIncident(authUser, incident)) {
+        return reply.code(403).send({
+          message: "You cannot view this incident.",
+        });
+      }
+
+      return {
+        incident,
+      };
+    }
+  );
+
   app.post(
     "/:incidentId/acknowledge",
     {
@@ -55,10 +154,7 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      if (
-        incident.currentAssigneeId !== authUser.sub &&
-        authUser.role !== "ADMIN"
-      ) {
+      if (!canManageIncident(authUser, incident)) {
         return reply.code(403).send({
           message: "You cannot acknowledge this incident.",
         });
@@ -82,6 +178,130 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
           type: "ACKNOWLEDGED",
           message: "Incident acknowledged by the current assignee.",
         },
+      });
+
+      await cancelEscalationCheck(app, incidentId);
+
+      return {
+        incident: updatedIncident,
+      };
+    }
+  );
+
+  app.post(
+    "/:incidentId/comments",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+      const { incidentId } = incidentParamsSchema.parse(request.params);
+      const body = incidentCommentSchema.parse(request.body);
+
+      const incident = await app.prisma.incident.findUnique({
+        where: {
+          id: incidentId,
+        },
+      });
+
+      if (!incident) {
+        return reply.code(404).send({
+          message: "Incident not found.",
+        });
+      }
+
+      if (!canManageIncident(authUser, incident)) {
+        return reply.code(403).send({
+          message: "You cannot comment on this incident.",
+        });
+      }
+
+      const event = await app.prisma.incidentEvent.create({
+        data: {
+          incidentId,
+          actorId: authUser.sub,
+          type: IncidentEventType.COMMENTED,
+          message: body.message,
+        },
+        include: {
+          actor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      return reply.code(201).send({
+        event,
+      });
+    }
+  );
+
+  app.post(
+    "/:incidentId/resolve",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+      const { incidentId } = incidentParamsSchema.parse(request.params);
+      const body = incidentResolveSchema.parse(request.body);
+
+      const incident = await app.prisma.incident.findUnique({
+        where: {
+          id: incidentId,
+        },
+      });
+
+      if (!incident) {
+        return reply.code(404).send({
+          message: "Incident not found.",
+        });
+      }
+
+      if (!canManageIncident(authUser, incident)) {
+        return reply.code(403).send({
+          message: "You cannot resolve this incident.",
+        });
+      }
+
+      const updatedIncident = await app.prisma.$transaction(async (tx) => {
+        if (body.resolutionNote) {
+          await tx.incidentEvent.create({
+            data: {
+              incidentId,
+              actorId: authUser.sub,
+              type: IncidentEventType.COMMENTED,
+              message: body.resolutionNote,
+            },
+          });
+        }
+
+        const resolvedIncident = await tx.incident.update({
+          where: {
+            id: incidentId,
+          },
+          data: {
+            status: IncidentStatus.RESOLVED,
+            resolvedAt: new Date(),
+            resolvedById: authUser.sub,
+          },
+        });
+
+        await tx.incidentEvent.create({
+          data: {
+            incidentId,
+            actorId: authUser.sub,
+            type: IncidentEventType.RESOLVED,
+            message: "Incident resolved.",
+          },
+        });
+
+        return resolvedIncident;
       });
 
       await cancelEscalationCheck(app, incidentId);

@@ -9,7 +9,6 @@ import { redisPlugin } from "./plugins/redis";
 import { socketPlugin } from "./plugins/socket";
 import { escalationQueuePlugin } from "./jobs/escalation-queue";
 import { appRoutes } from "./routes";
-import "./types/fastify";
 
 export async function createApp() {
   const config = getEnvConfig();
