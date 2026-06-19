@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ENGINEER
+  ADMIN
+}
+
+enum EscalationTargetType {
+  USER
+  SCHEDULE
+}
+
+enum IncidentSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum IncidentStatus {
+  TRIGGERED
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum IncidentEventType {
+  CREATED
+  NOTIFIED
+  ESCALATED
+  ACKNOWLEDGED
+  COMMENTED
+  RESOLVED
+}
+
+model User {
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String
+  email             String            @unique
+  passwordHash      String
+  role              UserRole          @default(ENGINEER)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  scheduleMembers   ScheduleMember[]
+  oncallShifts      OncallShift[]
+  assignedIncidents Incident[]        @relation("IncidentCurrentAssignee")
+  acknowledgedItems Incident[]        @relation("IncidentAcknowledgedBy")
+  resolvedItems     Incident[]        @relation("IncidentResolvedBy")
+  incidentEvents    IncidentEvent[]
+}
+
+model Service {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  description      String?
+  webhookToken     String            @unique @db.Uuid
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  escalationPolicy EscalationPolicy?
+  incidents        Incident[]
+
+  @@index([name])
+}
+
+model EscalationPolicy {
+  id             String    @id @default(uuid()) @db.Uuid
+  serviceId      String    @unique @db.Uuid
+  timeoutMinutes Int
+  steps          Json
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  service        Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String
+  timeZone        String           @default("UTC")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  members         ScheduleMember[]
+  oncallShifts    OncallShift[]
+
+  @@index([name])
+}
+
+model ScheduleMember {
+  scheduleId     String   @db.Uuid
+  userId         String   @db.Uuid
+  rotationOrder  Int
+  createdAt      DateTime @default(now())
+  schedule       Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([scheduleId, userId])
+  @@unique([scheduleId, rotationOrder])
+}
+
+model OncallShift {
+  id          String   @id @default(uuid()) @db.Uuid
+  scheduleId  String   @db.Uuid
+  userId      String   @db.Uuid
+  startTime   DateTime
+  endTime     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  schedule    Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, startTime, endTime])
+  @@index([userId, startTime, endTime])
+}
+
+model Incident {
+  id                   String            @id @default(uuid()) @db.Uuid
+  serviceId            String            @db.Uuid
+  currentAssigneeId    String?           @db.Uuid
+  escalationStepIndex  Int               @default(0)
+  title                String
+  description          String?
+  severity             IncidentSeverity
+  status               IncidentStatus    @default(TRIGGERED)
+  acknowledgedAt       DateTime?
+  acknowledgedById     String?           @db.Uuid
+  resolvedAt           DateTime?
+  resolvedById         String?           @db.Uuid
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  service              Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  currentAssignee      User?             @relation("IncidentCurrentAssignee", fields: [currentAssigneeId], references: [id], onDelete: SetNull)
+  acknowledgedBy       User?             @relation("IncidentAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  resolvedBy           User?             @relation("IncidentResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  events               IncidentEvent[]
+  postmortem           Postmortem?
+
+  @@index([serviceId, createdAt])
+  @@index([currentAssigneeId, status])
+  @@index([status, createdAt])
+}
+
+model IncidentEvent {
+  id          String            @id @default(uuid()) @db.Uuid
+  incidentId  String            @db.Uuid
+  actorId     String?           @db.Uuid
+  type        IncidentEventType
+  message     String
+  createdAt   DateTime          @default(now())
+  incident    Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actor       User?             @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+}
+
+model Postmortem {
+  id           String   @id @default(uuid()) @db.Uuid
+  incidentId   String   @unique @db.Uuid
+  aiDraft      Json?
+  finalContent Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}

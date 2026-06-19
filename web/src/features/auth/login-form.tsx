@@ -1,8 +1,12 @@
 "use client";
 
+import { startTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { isAxiosError } from "axios";
 import { z } from "zod";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,6 +17,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginUser } from "@/lib/auth";
+import { queryClient } from "@/lib/query-client";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -22,6 +28,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
+  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -31,7 +38,25 @@ export function LoginForm() {
   });
 
   async function onSubmit(data: LoginFormData) {
-    console.log(data);
+    try {
+      const user = await loginUser(data);
+
+      await queryClient.invalidateQueries({
+        queryKey: ["auth", "me"],
+      });
+
+      toast.success(`Signed in as ${user?.name ?? "your account"}.`);
+
+      startTransition(() => {
+        router.push("/dashboard");
+      });
+    } catch (error) {
+      const message = isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message ?? "Unable to sign in."
+        : "Unable to sign in.";
+
+      toast.error(message);
+    }
   }
 
   return (
