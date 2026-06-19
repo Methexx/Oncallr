@@ -18,6 +18,15 @@ export async function getMyIncidents() {
   return data.incidents;
 }
 
+export async function getAllIncidents(
+  status?: "TRIGGERED" | "ACKNOWLEDGED" | "RESOLVED"
+) {
+  const { data } = await apiClient.get<MyIncidentsResponse>("/incidents", {
+    params: status ? { status } : undefined,
+  });
+  return data.incidents;
+}
+
 export async function acknowledgeIncident(incidentId: string) {
   const { data } = await apiClient.post<IncidentResponse>(
     `/incidents/${incidentId}/acknowledge`

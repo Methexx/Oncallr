@@ -8,6 +8,10 @@ const incidentParamsSchema = z.object({
   incidentId: z.string().uuid(),
 });
 
+const incidentListQuerySchema = z.object({
+  status: z.enum(["TRIGGERED", "ACKNOWLEDGED", "RESOLVED"]).optional(),
+});
+
 const incidentCommentSchema = z.object({
   message: z.string().trim().min(1).max(5_000),
 });
@@ -34,6 +38,50 @@ function canManageIncident(
 
 export const incidentRoutes: FastifyPluginAsync = async (app) => {
   app.get(
+    "/",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request) => {
+      const authUser = request.user as AuthTokenPayload;
+      const query = incidentListQuerySchema.parse(request.query);
+
+      const incidents = await app.prisma.incident.findMany({
+        where: {
+          ...(query.status ? { status: query.status } : {}),
+          ...(authUser.role === UserRole.ADMIN
+            ? {}
+            : {
+                OR: [
+                  { currentAssigneeId: authUser.sub },
+                  { acknowledgedById: authUser.sub },
+                  { resolvedById: authUser.sub },
+                ],
+              }),
+        },
+        include: {
+          service: true,
+          currentAssignee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      return {
+        incidents,
+      };
+    }
+  );
+
+  app.get(
     "/my",
     {
       preHandler: app.authenticate,
@@ -46,6 +94,14 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
         },
         include: {
           service: true,
+          currentAssignee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",

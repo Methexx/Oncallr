@@ -1,3 +1,11 @@
+import { IncidentListView } from "@/features/incidents/incident-list-view";
+
 export default function IncidentsPage() {
-  return <section className="text-sm text-muted-foreground">Incidents page</section>;
+  return (
+    <IncidentListView
+      description="Browse accessible incidents across services, regardless of current assignment."
+      mode="all"
+      title="Incidents"
+    />
+  );
 }

@@ -1,3 +1,11 @@
+import { IncidentListView } from "@/features/incidents/incident-list-view";
+
 export default function MyIncidentsPage() {
-  return <section className="text-sm text-muted-foreground">My incidents page</section>;
+  return (
+    <IncidentListView
+      description="Track incidents currently assigned to you and jump into the timeline fast."
+      mode="assigned"
+      title="My Incidents"
+    />
+  );
 }
