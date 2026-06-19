@@ -26,3 +26,8 @@ export async function createSchedule(input: CreateScheduleInput) {
   const { data } = await apiClient.post<ScheduleResponse>("/schedules", input);
   return data.schedule;
 }
+
+export async function getScheduleDetails(scheduleId: string) {
+  const { data } = await apiClient.get<ScheduleResponse>(`/schedules/${scheduleId}`);
+  return data.schedule;
+}

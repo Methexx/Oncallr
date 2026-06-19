@@ -1,3 +1,5 @@
+import { ScheduleDetailView } from "@/features/schedules/schedule-detail-view";
+
 interface ScheduleDetailsPageProps {
   params: Promise<{
     scheduleId: string;
@@ -9,9 +11,5 @@ export default async function ScheduleDetailsPage({
 }: ScheduleDetailsPageProps) {
   const { scheduleId } = await params;
 
-  return (
-    <section className="text-sm text-muted-foreground">
-      Schedule details page for {scheduleId}
-    </section>
-  );
+  return <ScheduleDetailView scheduleId={scheduleId} />;
 }

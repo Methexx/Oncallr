@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
@@ -32,7 +33,11 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{schedule.name}</CardTitle>
+        <CardTitle>
+          <Link className="underline-offset-4 hover:underline" href={`/schedules/${schedule.id}`}>
+            {schedule.name}
+          </Link>
+        </CardTitle>
         <CardDescription>{schedule.timeZone}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

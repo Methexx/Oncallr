@@ -1,7 +1,5 @@
+import { EscalationPoliciesView } from "@/features/escalation/escalation-policies-view";
+
 export default function EscalationPoliciesPage() {
-  return (
-    <section className="text-sm text-muted-foreground">
-      Escalation policies page
-    </section>
-  );
+  return <EscalationPoliciesView />;
 }

@@ -1,6 +1,9 @@
 "use client";
 
+"use client";
+
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { toast } from "sonner";
@@ -48,7 +51,11 @@ function ServiceCard({ service }: { service: Service }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{service.name}</CardTitle>
+        <CardTitle>
+          <Link className="underline-offset-4 hover:underline" href={`/services/${service.id}`}>
+            {service.name}
+          </Link>
+        </CardTitle>
         <CardDescription>
           Created {formatDate(service.createdAt)}
         </CardDescription>

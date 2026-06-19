@@ -1,3 +1,5 @@
+import { AnalyticsView } from "@/features/analytics/analytics-view";
+
 export default function AnalyticsPage() {
-  return <section className="text-sm text-muted-foreground">Analytics page</section>;
+  return <AnalyticsView />;
 }

@@ -14,6 +14,10 @@ const createScheduleSchema = z.object({
   members: z.array(scheduleMemberSchema).min(1),
 });
 
+const scheduleParamsSchema = z.object({
+  scheduleId: z.string().uuid(),
+});
+
 function startOfNextHour(date: Date) {
   const value = new Date(date);
   value.setMinutes(0, 0, 0);
@@ -87,6 +91,74 @@ export const scheduleRoutes: FastifyPluginAsync = async (app) => {
 
       return {
         schedules: enriched,
+      };
+    }
+  );
+
+  app.get(
+    "/:scheduleId",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const { scheduleId } = scheduleParamsSchema.parse(request.params);
+      const now = new Date();
+
+      const schedule = await app.prisma.schedule.findUnique({
+        where: {
+          id: scheduleId,
+        },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+            orderBy: {
+              rotationOrder: "asc",
+            },
+          },
+          oncallShifts: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+            orderBy: {
+              startTime: "asc",
+            },
+            take: 12,
+          },
+        },
+      });
+
+      if (!schedule) {
+        return reply.code(404).send({
+          message: "Schedule not found.",
+        });
+      }
+
+      const currentOnCall =
+        schedule.oncallShifts.find(
+          (shift) => shift.startTime <= now && shift.endTime > now
+        ) ?? null;
+
+      return {
+        schedule: {
+          ...schedule,
+          currentOnCall,
+        },
       };
     }
   );

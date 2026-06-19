@@ -10,4 +10,11 @@ export interface Service {
     timeoutMinutes: number;
     steps: unknown;
   } | null;
+  incidents?: Array<{
+    id: string;
+    title: string;
+    status: "TRIGGERED" | "ACKNOWLEDGED" | "RESOLVED";
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    createdAt: string;
+  }>;
 }

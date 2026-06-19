@@ -54,6 +54,30 @@ export default function DashboardLayout({
                 >
                   Schedules
                 </Link>
+                <Link
+                  className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  href="/escalation-policies"
+                >
+                  Policies
+                </Link>
+                <Link
+                  className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  href="/analytics"
+                >
+                  Analytics
+                </Link>
+                <Link
+                  className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  href="/postmortems"
+                >
+                  Postmortems
+                </Link>
+                <Link
+                  className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  href="/settings"
+                >
+                  Settings
+                </Link>
               </nav>
             </div>
           </header>
