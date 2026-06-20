@@ -22,6 +22,20 @@ interface UpdateScheduleInput extends CreateScheduleInput {
   scheduleId: string;
 }
 
+interface UpdateShiftInput {
+  scheduleId: string;
+  shiftId: string;
+  userId: string;
+  startTime: string;
+  endTime: string;
+}
+
+interface SwapShiftsInput {
+  scheduleId: string;
+  firstShiftId: string;
+  secondShiftId: string;
+}
+
 export async function getSchedules() {
   const { data } = await apiClient.get<SchedulesResponse>("/schedules");
   return data.schedules;
@@ -45,6 +59,29 @@ export async function updateSchedule(input: UpdateScheduleInput) {
       timeZone: input.timeZone,
       rotationLengthDays: input.rotationLengthDays,
       members: input.members,
+    }
+  );
+  return data.schedule;
+}
+
+export async function updateScheduleShift(input: UpdateShiftInput) {
+  const { data } = await apiClient.patch<ScheduleResponse>(
+    `/schedules/${input.scheduleId}/shifts/${input.shiftId}`,
+    {
+      userId: input.userId,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    }
+  );
+  return data.schedule;
+}
+
+export async function swapScheduleShifts(input: SwapShiftsInput) {
+  const { data } = await apiClient.post<ScheduleResponse>(
+    `/schedules/${input.scheduleId}/shifts/swap`,
+    {
+      firstShiftId: input.firstShiftId,
+      secondShiftId: input.secondShiftId,
     }
   );
   return data.schedule;
