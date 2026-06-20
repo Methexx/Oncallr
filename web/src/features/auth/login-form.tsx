@@ -3,7 +3,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
+import { GravityWell } from "@/components/shared/gravity-well";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,6 +32,7 @@ type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export function LoginForm() {
+  const reduceMotion = useReducedMotion();
   const loginForm = useForm<MagicLinkFormData>({
     resolver: zodResolver(magicLinkSchema),
   });
@@ -62,14 +65,22 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
+    <motion.div
+      initial={reduceMotion ? undefined : { opacity: 0, y: 18 }}
+      animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+    >
+    <Card className="app-shell orbital-panel border-primary/10">
       <CardHeader className="space-y-3">
-        <div className="inline-flex w-fit rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-          Secure access
+        <div className="flex items-center gap-2">
+          <GravityWell intensity="pulse" size={16} tone="brand" />
+          <div className="inline-flex w-fit rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+            Secure access
+          </div>
         </div>
         <CardTitle className="text-3xl tracking-tight">Access OnCallr</CardTitle>
         <CardDescription>
-          Use a Supabase magic link to sign in or create an engineer account.
+          Use a Supabase magic link to enter the incident console or create an engineer account.
         </CardDescription>
       </CardHeader>
 
@@ -167,7 +178,7 @@ export function LoginForm() {
           </TabsContent>
         </Tabs>
 
-        <div className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="rounded-[24px] border border-primary/12 bg-muted/35 p-4 text-sm text-muted-foreground">
           Magic links come from Supabase Auth. Add
           {" "}
           <span className="font-medium">http://localhost:3000/auth/callback</span>
@@ -176,5 +187,6 @@ export function LoginForm() {
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }

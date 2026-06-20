@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
 import { BellRing, ChartNoAxesCombined, ClipboardList, FileText, Gauge, Layers3, Settings2, ShieldAlert, TimerReset } from "lucide-react";
+import { GravityWell } from "@/components/shared/gravity-well";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,7 @@ const navItems = [
 
 export function DashboardHeader() {
   const pathname = usePathname();
+  const reduceMotion = useReducedMotion();
 
   return (
     <header className="app-shell mb-6 overflow-hidden">
@@ -36,12 +39,16 @@ export function DashboardHeader() {
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
                 Follow live incidents, manage rotations, escalate automatically, and keep the team aligned from alert to postmortem.
               </p>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs text-primary">
+                <GravityWell intensity="pulse" size={16} tone="brand" />
+                Live orbital status
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              className="rounded-full border border-border/70 bg-background/70 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-background"
+        <div className="flex items-center gap-3">
+          <Link
+            className="rounded-full border border-border/70 bg-background/70 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-background"
               href="/"
             >
               View site intro
@@ -57,19 +64,26 @@ export function DashboardHeader() {
             pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
           return (
-            <Link
+            <motion.div
               key={href}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all",
-                isActive
-                  ? "border-primary/30 bg-primary text-primary-foreground shadow-sm"
-                  : "border-border/70 bg-background/65 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-              href={href}
+              whileHover={reduceMotion ? undefined : { scale: 1.015, y: -2 }}
             >
-              <Icon className="size-4" />
-              <span>{label}</span>
-            </Link>
+              <Link
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all",
+                  isActive
+                    ? "border-primary/28 bg-primary text-primary-foreground shadow-[0_0_28px_color-mix(in_oklch,var(--primary)_20%,transparent)]"
+                    : "border-border/70 bg-background/65 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                href={href}
+              >
+                <Icon className="size-4" />
+                <span>{label}</span>
+                {isActive ? (
+                  <GravityWell intensity="pulse" size={12} tone="brand" />
+                ) : null}
+              </Link>
+            </motion.div>
           );
         })}
       </nav>
