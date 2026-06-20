@@ -17,6 +17,8 @@ declare module "fastify" {
       jwtSecret: string;
       jwtExpiresIn: string;
       authCookieName: string;
+      openaiApiKey?: string;
+      openaiModel: string;
       smtpHost?: string;
       smtpPort?: number;
       smtpSecure: boolean;
