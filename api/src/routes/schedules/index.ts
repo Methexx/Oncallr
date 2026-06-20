@@ -1,6 +1,6 @@
 import { addDays } from "date-fns";
 import { UserRole } from "@prisma/client";
-import { FastifyPluginAsync } from "fastify";
+import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { AuthTokenPayload } from "../../types/auth";
 
@@ -24,6 +24,22 @@ const updateScheduleSchema = z.object({
 
 const scheduleParamsSchema = z.object({
   scheduleId: z.string().uuid(),
+});
+
+const scheduleShiftParamsSchema = z.object({
+  scheduleId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+});
+
+const updateShiftSchema = z.object({
+  userId: z.string().uuid(),
+  startTime: z.coerce.date(),
+  endTime: z.coerce.date(),
+});
+
+const swapShiftsSchema = z.object({
+  firstShiftId: z.string().uuid(),
+  secondShiftId: z.string().uuid(),
 });
 
 function startOfNextHour(date: Date) {
@@ -57,6 +73,102 @@ function buildShiftPlan(options: {
       endTime,
     };
   });
+}
+
+async function getScheduleWithDetails(app: FastifyInstance, scheduleId: string) {
+  const now = new Date();
+  const schedule = await app.prisma.schedule.findUnique({
+    where: {
+      id: scheduleId,
+    },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          rotationOrder: "asc",
+        },
+      },
+      oncallShifts: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          startTime: "asc",
+        },
+        take: 12,
+      },
+    },
+  });
+
+  if (!schedule) {
+    return null;
+  }
+
+  const currentOnCall =
+    schedule.oncallShifts.find(
+      (shift) => shift.startTime <= now && shift.endTime > now
+    ) ?? null;
+
+  return {
+    ...schedule,
+    currentOnCall,
+  };
+}
+
+async function findShiftOverlap(app: FastifyInstance, input: {
+  scheduleId: string;
+  userId: string;
+  startTime: Date;
+  endTime: Date;
+  excludeShiftId?: string;
+}) {
+  const [scheduleOverlap, userOverlap] = await Promise.all([
+    app.prisma.oncallShift.findFirst({
+      where: {
+        scheduleId: input.scheduleId,
+        id: input.excludeShiftId ? { not: input.excludeShiftId } : undefined,
+        startTime: {
+          lt: input.endTime,
+        },
+        endTime: {
+          gt: input.startTime,
+        },
+      },
+    }),
+    app.prisma.oncallShift.findFirst({
+      where: {
+        userId: input.userId,
+        id: input.excludeShiftId ? { not: input.excludeShiftId } : undefined,
+        startTime: {
+          lt: input.endTime,
+        },
+        endTime: {
+          gt: input.startTime,
+        },
+      },
+    }),
+    ]);
+
+  return {
+    scheduleOverlap,
+    userOverlap,
+  };
 }
 
 export const scheduleRoutes: FastifyPluginAsync = async (app) => {
@@ -136,46 +248,7 @@ export const scheduleRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { scheduleId } = scheduleParamsSchema.parse(request.params);
-      const now = new Date();
-
-      const schedule = await app.prisma.schedule.findUnique({
-        where: {
-          id: scheduleId,
-        },
-        include: {
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  role: true,
-                },
-              },
-            },
-            orderBy: {
-              rotationOrder: "asc",
-            },
-          },
-          oncallShifts: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  role: true,
-                },
-              },
-            },
-            orderBy: {
-              startTime: "asc",
-            },
-            take: 12,
-          },
-        },
-      });
+      const schedule = await getScheduleWithDetails(app, scheduleId);
 
       if (!schedule) {
         return reply.code(404).send({
@@ -183,16 +256,8 @@ export const scheduleRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const currentOnCall =
-        schedule.oncallShifts.find(
-          (shift) => shift.startTime <= now && shift.endTime > now
-        ) ?? null;
-
       return {
-        schedule: {
-          ...schedule,
-          currentOnCall,
-        },
+        schedule,
       };
     }
   );
@@ -473,6 +538,231 @@ export const scheduleRoutes: FastifyPluginAsync = async (app) => {
           ...updatedSchedule,
           currentOnCall,
         },
+      };
+    }
+  );
+
+  app.patch(
+    "/:scheduleId/shifts/:shiftId",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+
+      if (authUser.role !== UserRole.ADMIN) {
+        return reply.code(403).send({
+          message: "Only admins can override shifts.",
+        });
+      }
+
+      const { scheduleId, shiftId } = scheduleShiftParamsSchema.parse(request.params);
+      const body = updateShiftSchema.parse(request.body);
+      const now = new Date();
+
+      if (body.endTime <= body.startTime) {
+        return reply.code(400).send({
+          message: "Shift end time must be after the start time.",
+        });
+      }
+
+      const [schedule, shift] = await Promise.all([
+        app.prisma.schedule.findUnique({
+          where: {
+            id: scheduleId,
+          },
+          include: {
+            members: true,
+          },
+        }),
+        app.prisma.oncallShift.findUnique({
+          where: {
+            id: shiftId,
+          },
+        }),
+      ]);
+
+      if (!schedule) {
+        return reply.code(404).send({
+          message: "Schedule not found.",
+        });
+      }
+
+      if (!shift || shift.scheduleId !== scheduleId) {
+        return reply.code(404).send({
+          message: "Shift not found for this schedule.",
+        });
+      }
+
+      if (shift.startTime <= now) {
+        return reply.code(400).send({
+          message: "Only future shifts can be overridden.",
+        });
+      }
+
+      if (!schedule.members.some((member) => member.userId === body.userId)) {
+        return reply.code(400).send({
+          message: "Shift overrides must target a current schedule member.",
+        });
+      }
+
+      const overlap = await findShiftOverlap(app, {
+        scheduleId,
+        userId: body.userId,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        excludeShiftId: shiftId,
+      });
+
+      if (overlap.scheduleOverlap) {
+        return reply.code(400).send({
+          message: "This override would overlap another shift in the schedule.",
+        });
+      }
+
+      if (overlap.userOverlap) {
+        return reply.code(400).send({
+          message: "This user already has an overlapping on-call shift.",
+        });
+      }
+
+      await app.prisma.oncallShift.update({
+        where: {
+          id: shiftId,
+        },
+        data: {
+          userId: body.userId,
+          startTime: body.startTime,
+          endTime: body.endTime,
+        },
+      });
+
+      app.log.info(
+        {
+          scheduleId,
+          shiftId,
+          actorId: authUser.sub,
+          userId: body.userId,
+        },
+        "Schedule shift overridden."
+      );
+
+      const updatedSchedule = await getScheduleWithDetails(app, scheduleId);
+
+      return {
+        schedule: updatedSchedule,
+      };
+    }
+  );
+
+  app.post(
+    "/:scheduleId/shifts/swap",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+
+      if (authUser.role !== UserRole.ADMIN) {
+        return reply.code(403).send({
+          message: "Only admins can swap shifts.",
+        });
+      }
+
+      const { scheduleId } = scheduleParamsSchema.parse(request.params);
+      const body = swapShiftsSchema.parse(request.body);
+      const now = new Date();
+
+      if (body.firstShiftId === body.secondShiftId) {
+        return reply.code(400).send({
+          message: "Choose two different shifts to swap.",
+        });
+      }
+
+      const shifts = await app.prisma.oncallShift.findMany({
+        where: {
+          id: {
+            in: [body.firstShiftId, body.secondShiftId],
+          },
+          scheduleId,
+        },
+      });
+
+      if (shifts.length !== 2) {
+        return reply.code(404).send({
+          message: "One or both shifts could not be found for this schedule.",
+        });
+      }
+
+      const [firstShift, secondShift] = shifts;
+
+      if (firstShift.startTime <= now || secondShift.startTime <= now) {
+        return reply.code(400).send({
+          message: "Only future shifts can be swapped.",
+        });
+      }
+
+      const firstOverlap = await findShiftOverlap(app, {
+        scheduleId,
+        userId: secondShift.userId,
+        startTime: firstShift.startTime,
+        endTime: firstShift.endTime,
+        excludeShiftId: firstShift.id,
+      });
+
+      if (firstOverlap.userOverlap && firstOverlap.userOverlap.id !== secondShift.id) {
+        return reply.code(400).send({
+          message: "Swapping would create an overlapping shift for one engineer.",
+        });
+      }
+
+      const secondOverlap = await findShiftOverlap(app, {
+        scheduleId,
+        userId: firstShift.userId,
+        startTime: secondShift.startTime,
+        endTime: secondShift.endTime,
+        excludeShiftId: secondShift.id,
+      });
+
+      if (secondOverlap.userOverlap && secondOverlap.userOverlap.id !== firstShift.id) {
+        return reply.code(400).send({
+          message: "Swapping would create an overlapping shift for one engineer.",
+        });
+      }
+
+      await app.prisma.$transaction([
+        app.prisma.oncallShift.update({
+          where: {
+            id: firstShift.id,
+          },
+          data: {
+            userId: secondShift.userId,
+          },
+        }),
+        app.prisma.oncallShift.update({
+          where: {
+            id: secondShift.id,
+          },
+          data: {
+            userId: firstShift.userId,
+          },
+        }),
+      ]);
+
+      app.log.info(
+        {
+          scheduleId,
+          actorId: authUser.sub,
+          firstShiftId: firstShift.id,
+          secondShiftId: secondShift.id,
+        },
+        "Schedule shifts swapped."
+      );
+
+      const updatedSchedule = await getScheduleWithDetails(app, scheduleId);
+
+      return {
+        schedule: updatedSchedule,
       };
     }
   );

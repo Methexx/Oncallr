@@ -57,3 +57,10 @@ export async function triggerServiceIncident(input: TriggerIncidentInput) {
 
   return data.incident;
 }
+
+export async function regenerateWebhookToken(serviceId: string) {
+  const { data } = await apiClient.post<ServiceResponse>(
+    `/services/${serviceId}/regenerate-webhook-token`
+  );
+  return data.service;
+}

@@ -5,10 +5,11 @@ interface AnalyticsResponse {
   summary: AnalyticsSummary;
 }
 
-export async function getAnalyticsOverview(days: number) {
+export async function getAnalyticsOverview(days: number, serviceId?: string) {
   const { data } = await apiClient.get<AnalyticsResponse>("/analytics/overview", {
     params: {
       days,
+      serviceId,
     },
   });
 

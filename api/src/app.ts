@@ -8,6 +8,7 @@ import { prismaPlugin } from "./plugins/prisma";
 import { redisPlugin } from "./plugins/redis";
 import { socketPlugin } from "./plugins/socket";
 import { escalationQueuePlugin } from "./jobs/escalation-queue";
+import { buildHealthStatus } from "./routes/health";
 import { appRoutes } from "./routes";
 
 export async function createApp() {
@@ -38,10 +39,14 @@ export async function createApp() {
   await app.register(escalationQueuePlugin);
   await app.register(appRoutes);
 
-  app.get("/health", async () => {
-    return {
-      status: "ok",
-    };
+  app.get("/health", async (_request, reply) => {
+    const health = await buildHealthStatus(app);
+
+    if (health.status === "degraded") {
+      reply.code(503);
+    }
+
+    return health;
   });
 
   return app;

@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AxiosError } from "axios";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,7 +14,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getServiceDetails } from "@/services/services";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  getServiceDetails,
+  regenerateWebhookToken,
+} from "@/services/services";
 
 interface ServiceDetailViewProps {
   serviceId: string;
@@ -28,12 +35,51 @@ function formatDate(value?: string) {
   }).format(new Date(value));
 }
 
+function getWebhookUrl(token: string) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+  return `${apiUrl}/webhooks/incidents/${token}`;
+}
+
 export function ServiceDetailView({ serviceId }: ServiceDetailViewProps) {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const isAdmin = auth.user?.role === "ADMIN";
+
   const serviceQuery = useQuery({
     queryKey: ["services", "detail", serviceId],
     queryFn: () => getServiceDetails(serviceId),
     retry: false,
   });
+
+  const regenerateTokenMutation = useMutation({
+    mutationFn: () => regenerateWebhookToken(serviceId),
+    onSuccess: async (service) => {
+      toast.success("Webhook token regenerated.");
+      await queryClient.invalidateQueries({
+        queryKey: ["services", "detail", serviceId],
+      });
+      await navigator.clipboard
+        .writeText(getWebhookUrl(service.webhookToken))
+        .catch(() => undefined);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof AxiosError
+          ? error.response?.data?.message ?? "Unable to regenerate token."
+          : "Unable to regenerate token.";
+
+      toast.error(message);
+    },
+  });
+
+  async function copyWebhookUrl(token: string) {
+    try {
+      await navigator.clipboard.writeText(getWebhookUrl(token));
+      toast.success("Webhook URL copied.");
+    } catch {
+      toast.error("Unable to copy webhook URL.");
+    }
+  }
 
   if (serviceQuery.isLoading) {
     return (
@@ -56,6 +102,8 @@ export function ServiceDetailView({ serviceId }: ServiceDetailViewProps) {
       </Card>
     );
   }
+
+  const webhookUrl = getWebhookUrl(service.webhookToken);
 
   return (
     <section className="space-y-6">
@@ -87,9 +135,37 @@ export function ServiceDetailView({ serviceId }: ServiceDetailViewProps) {
                 : "No escalation policy attached"}
             </Badge>
           </div>
+
+          <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm">
+            <p className="font-medium">Webhook URL</p>
+            <p className="mt-1 break-all text-muted-foreground">{webhookUrl}</p>
+          </div>
+
           <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm">
             <p className="font-medium">Webhook token</p>
             <p className="mt-1 break-all text-muted-foreground">{service.webhookToken}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => copyWebhookUrl(service.webhookToken)}
+              type="button"
+              variant="outline"
+            >
+              Copy webhook URL
+            </Button>
+
+            {isAdmin ? (
+              <Button
+                disabled={regenerateTokenMutation.isPending}
+                onClick={() => regenerateTokenMutation.mutate()}
+                type="button"
+              >
+                {regenerateTokenMutation.isPending
+                  ? "Rotating..."
+                  : "Rotate webhook token"}
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>

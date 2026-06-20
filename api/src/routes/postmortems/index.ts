@@ -1,7 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { IncidentStatus, UserRole } from "@prisma/client";
-import { FastifyPluginAsync } from "fastify";
+import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import {
+  generatePostmortemDraftWithAi,
+  isOpenAiConfigured,
+} from "../../services/openai-service";
 import { AuthTokenPayload } from "../../types/auth";
 
 const incidentParamsSchema = z.object({
@@ -37,24 +41,6 @@ function formatEventTypeLabel(type: string) {
   return type.charAt(0) + type.slice(1).toLowerCase();
 }
 
-function buildTimelineHighlights(
-  events: Array<{
-    type: string;
-    message: string;
-    createdAt: Date;
-  }>
-) {
-  return events.slice(0, 8).map((event) => {
-    const timestamp = new Intl.DateTimeFormat("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "UTC",
-    }).format(event.createdAt);
-
-    return `${timestamp} UTC - ${formatEventTypeLabel(event.type)}: ${event.message}`;
-  });
-}
-
 function buildDraftContent(incident: {
   title: string;
   description: string | null;
@@ -70,8 +56,16 @@ function buildDraftContent(incident: {
     createdAt: Date;
   }>;
 }) {
+  const timelineHighlights = incident.events.slice(0, 8).map((event) => {
+    const timestamp = new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "UTC",
+    }).format(event.createdAt);
+
+    return `${timestamp} UTC - ${formatEventTypeLabel(event.type)}: ${event.message}`;
+  });
   const commentEvents = incident.events.filter((event) => event.type === "COMMENTED");
-  const timelineHighlights = buildTimelineHighlights(incident.events);
   const latestComment = commentEvents.at(-1)?.message;
 
   return {
@@ -100,7 +94,7 @@ function buildDraftContent(incident: {
   } as Prisma.InputJsonValue;
 }
 
-async function getResolvedIncident(app: any, incidentId: string) {
+async function getResolvedIncident(app: FastifyInstance, incidentId: string) {
   return app.prisma.incident.findUnique({
     where: {
       id: incidentId,
@@ -259,7 +253,26 @@ export const postmortemRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const aiDraft = buildDraftContent(incident);
+      let aiDraft: Prisma.InputJsonValue;
+
+      if (isOpenAiConfigured(app)) {
+        try {
+          aiDraft = (await generatePostmortemDraftWithAi(
+            app,
+            incident
+          )) as Prisma.InputJsonValue;
+        } catch (error) {
+          app.log.error({ err: error, incidentId }, "OpenAI postmortem generation failed.");
+          return reply.code(502).send({
+            message: "AI draft generation failed. Check the OpenAI configuration and try again.",
+          });
+        }
+      } else {
+        return reply.code(503).send({
+          message: "OpenAI is not configured for AI postmortem generation yet.",
+        });
+      }
+
       const postmortem = await app.prisma.postmortem.upsert({
         where: {
           incidentId,

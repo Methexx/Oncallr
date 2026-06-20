@@ -34,7 +34,8 @@ OnCallr is designed around a simple operational flow:
 
 ### Authentication
 
-- Cookie-based JWT authentication
+- Supabase magic-link sign-in and registration
+- Backend JWT cookie session exchange after callback
 - Engineer and admin roles
 - Protected dashboard routes
 
@@ -202,7 +203,11 @@ Create `web/.env.local`:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
+
+Also add `http://localhost:3000/auth/callback` to the Redirect URLs list in your Supabase Auth settings.
 
 ### Install Dependencies
 
@@ -291,7 +296,7 @@ curl -X POST http://localhost:5000/api/webhooks/incidents/<webhook-token> \
 
 ## Project Status
 
-This is an actively built implementation, not just a design doc. The current version already supports real end-to-end flows across:
+This is a working implementation, not just a design doc. The current version already supports real end-to-end flows across:
 
 - login
 - service creation
@@ -303,7 +308,13 @@ This is an actively built implementation, not just a design doc. The current ver
 - postmortem editing
 - analytics
 
-Areas still open for future polish include deeper shift override tooling, richer analytics, and more production-grade notification providers.
+The product also now includes:
+
+- shift override and swap management for future schedule coverage
+- service-filtered analytics with severity breakdowns
+- webhook token rotation from the dashboard
+- OpenAI-backed postmortem draft generation
+- email fallback notifications when no active socket connection exists
 
 ## Related Docs
 
