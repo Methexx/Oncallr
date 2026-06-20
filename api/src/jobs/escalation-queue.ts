@@ -28,6 +28,25 @@ export const escalationQueuePlugin = fp(async (app: FastifyInstance) => {
     }
   );
 
+  escalationQueue.on("error", (error) => {
+    app.log.error({ err: error }, "BullMQ queue error.");
+  });
+
+  escalationWorker.on("error", (error) => {
+    app.log.error({ err: error }, "Escalation worker error.");
+  });
+
+  try {
+    await escalationQueue.waitUntilReady();
+    await escalationWorker.waitUntilReady();
+  } catch {
+    await escalationWorker.close().catch(() => undefined);
+    await escalationQueue.close().catch(() => undefined);
+    throw new Error(
+      `Unable to connect BullMQ to Redis at ${app.config.redisUrl}. Start Redis and try again.`
+    );
+  }
+
   app.decorate("queues", {
     escalation: escalationQueue,
   });
