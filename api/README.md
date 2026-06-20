@@ -37,6 +37,8 @@ Required values:
 - `WEB_ORIGIN`
 - `DATABASE_URL`
 - `REDIS_URL`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
 - `JWT_SECRET`
 
 Optional but recommended:
@@ -86,6 +88,7 @@ After seeding, the script prints the webhook token for the seeded service.
 ### Auth
 
 - `POST /api/auth/login`
+- `POST /api/auth/exchange`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 

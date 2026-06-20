@@ -14,6 +14,8 @@ declare module "fastify" {
       webOrigins: string[];
       databaseUrl: string;
       redisUrl: string;
+      supabaseUrl: string;
+      supabasePublishableKey: string;
       jwtSecret: string;
       jwtExpiresIn: string;
       authCookieName: string;

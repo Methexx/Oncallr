@@ -21,6 +21,8 @@ WEB_ORIGIN=https://your-frontend-domain.example
 DATABASE_URL=postgresql://...
 DATABASE_SSL_REJECT_UNAUTHORIZED=false
 REDIS_URL=redis://...
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=7d
 AUTH_COOKIE_NAME=oncallr_token
@@ -48,7 +50,13 @@ Set these on Vercel or your frontend host:
 ```env
 NEXT_PUBLIC_API_URL=https://your-api-domain.example/api
 NEXT_PUBLIC_SOCKET_URL=https://your-api-domain.example
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
+
+Add your deployed callback URL to Supabase Redirect URLs as well, for example:
+
+- `https://your-frontend-domain.example/auth/callback`
 
 ## Deployment order
 

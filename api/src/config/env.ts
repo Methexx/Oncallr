@@ -12,6 +12,8 @@ const envSchema = z.object({
   WEB_ORIGIN: webOriginsSchema,
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default("7d"),
   AUTH_COOKIE_NAME: z.string().default("oncallr_token"),
@@ -40,6 +42,8 @@ export type AppConfig = {
   webOrigins: string[];
   databaseUrl: string;
   redisUrl: string;
+  supabaseUrl: string;
+  supabasePublishableKey: string;
   jwtSecret: string;
   jwtExpiresIn: string;
   authCookieName: string;
@@ -65,6 +69,8 @@ export function getEnvConfig(): AppConfig {
     webOrigins: parsed.WEB_ORIGIN,
     databaseUrl: parsed.DATABASE_URL,
     redisUrl: parsed.REDIS_URL,
+    supabaseUrl: parsed.SUPABASE_URL,
+    supabasePublishableKey: parsed.SUPABASE_PUBLISHABLE_KEY,
     jwtSecret: parsed.JWT_SECRET,
     jwtExpiresIn: parsed.JWT_EXPIRES_IN,
     authCookieName: parsed.AUTH_COOKIE_NAME,

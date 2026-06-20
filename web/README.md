@@ -34,7 +34,8 @@ OnCallr is designed around a simple operational flow:
 
 ### Authentication
 
-- Cookie-based JWT authentication
+- Supabase magic-link sign-in and registration
+- Backend JWT cookie session exchange after callback
 - Engineer and admin roles
 - Protected dashboard routes
 
@@ -202,7 +203,11 @@ Create `web/.env.local`:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
+
+Also add `http://localhost:3000/auth/callback` to the Redirect URLs list in your Supabase Auth settings.
 
 ### Install Dependencies
 

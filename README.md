@@ -51,7 +51,8 @@ Oncallr/
 
 ### Auth and roles
 
-- Cookie-based JWT auth
+- Supabase magic-link auth on the frontend
+- Fastify cookie-based JWT session inside the app
 - Engineer and admin permissions
 - Protected dashboard routes
 
@@ -128,6 +129,7 @@ Important notes:
 - If your database password contains `@`, encode it as `%40` inside `DATABASE_URL`
 - Supabase Postgres usually needs SSL enabled
 - Only `NEXT_PUBLIC_*` values belong in `web/.env.local`
+- Add `http://localhost:3000/auth/callback` to Supabase Auth redirect URLs before testing magic links
 
 ### 3. Start Redis
 
