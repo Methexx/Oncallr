@@ -15,7 +15,7 @@ export async function createApp() {
   const config = getEnvConfig();
   const app = Fastify({
     logger: true,
-  });
+  }); 
 
   app.decorate("config", config);
 
