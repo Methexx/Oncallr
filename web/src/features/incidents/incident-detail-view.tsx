@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
@@ -20,13 +20,20 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { useSocket } from "@/hooks/use-socket";
 import {
   acknowledgeIncident,
   addIncidentComment,
+  escalateIncidentNow,
   getIncidentDetails,
   resolveIncident,
 } from "@/services/incidents";
-import { Incident, IncidentEvent } from "@/types/incident";
+import {
+  Incident,
+  IncidentEvent,
+  IncidentNotificationPayload,
+  IncidentUpdatePayload,
+} from "@/types/incident";
 
 interface IncidentDetailViewProps {
   incidentId: string;
@@ -64,6 +71,9 @@ function IncidentSummary({ incident }: { incident: Incident }) {
         <div className="flex flex-wrap gap-2">
           <Badge>{formatSeverity(incident.severity)}</Badge>
           <Badge variant="outline">{incident.status}</Badge>
+          <Badge variant="secondary">
+            Escalation step {(incident.escalationStepIndex ?? 0) + 1}
+          </Badge>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
@@ -150,6 +160,7 @@ function IncidentTimeline({ events }: { events: IncidentEvent[] }) {
 export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
   const queryClient = useQueryClient();
   const auth = useAuth();
+  const socket = useSocket();
   const [comment, setComment] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
   const incidentQuery = useQuery({
@@ -162,6 +173,7 @@ export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
   const incident = incidentQuery.data;
   const canAcknowledge = incident?.status === "TRIGGERED";
   const canResolve = incident?.status !== "RESOLVED";
+  const isAdmin = auth.user?.role === "ADMIN";
 
   const refreshIncidentData = useMemo(
     () => async () => {
@@ -171,6 +183,9 @@ export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
         }),
         queryClient.invalidateQueries({
           queryKey: ["incidents", "my"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["incidents"],
         }),
       ]);
     },
@@ -228,6 +243,62 @@ export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
     },
   });
 
+  const escalateNowMutation = useMutation({
+    mutationFn: () => escalateIncidentNow(incidentId),
+    onSuccess: async () => {
+      toast.success("Escalation advanced to the next step.");
+      await refreshIncidentData();
+    },
+    onError: (error) => {
+      const message =
+        error instanceof AxiosError
+          ? error.response?.data?.message ?? "Unable to force escalation."
+          : "Unable to force escalation.";
+
+      toast.error(message);
+    },
+  });
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      return;
+    }
+
+    const onIncidentCreated = (payload: IncidentNotificationPayload) => {
+      if (payload.incidentId !== incidentId) {
+        return;
+      }
+
+      startTransition(() => {
+        void refreshIncidentData();
+      });
+    };
+
+    const onIncidentUpdated = (payload: IncidentUpdatePayload) => {
+      if (payload.incidentId !== incidentId) {
+        return;
+      }
+
+      if (payload.updateType === "ESCALATED") {
+        toast.info(
+          `Escalation moved to ${payload.currentAssigneeName ?? "the next responder"}.`
+        );
+      }
+
+      startTransition(() => {
+        void refreshIncidentData();
+      });
+    };
+
+    socket.on("incident:new", onIncidentCreated);
+    socket.on("incident:update", onIncidentUpdated);
+
+    return () => {
+      socket.off("incident:new", onIncidentCreated);
+      socket.off("incident:update", onIncidentUpdated);
+    };
+  }, [auth.isAuthenticated, incidentId, refreshIncidentData, socket]);
+
   if (incidentQuery.isLoading || auth.isLoading) {
     return (
       <div className="space-y-4">
@@ -269,6 +340,14 @@ export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
           Back to dashboard
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">Incident details</h1>
+        {incident.status === "RESOLVED" ? (
+          <Link
+            className="inline-block text-sm font-medium underline underline-offset-4"
+            href={`/postmortems/${incident.id}`}
+          >
+            Open postmortem
+          </Link>
+        ) : null}
       </div>
 
       <IncidentSummary incident={incident} />
@@ -315,6 +394,20 @@ export function IncidentDetailView({ incidentId }: IncidentDetailViewProps) {
               >
                 {resolveMutation.isPending ? "Resolving..." : "Resolve incident"}
               </Button>
+
+              {isAdmin ? (
+                <Button
+                  className="w-full"
+                  disabled={escalateNowMutation.isPending || incident.status !== "TRIGGERED"}
+                  onClick={() => escalateNowMutation.mutate()}
+                  type="button"
+                  variant="outline"
+                >
+                  {escalateNowMutation.isPending
+                    ? "Escalating..."
+                    : "Escalate now"}
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
 

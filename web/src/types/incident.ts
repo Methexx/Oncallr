@@ -1,4 +1,5 @@
 import { AuthUser } from "@/types/auth";
+import { Postmortem } from "@/types/postmortem";
 
 export interface Incident {
   id: string;
@@ -21,6 +22,7 @@ export interface Incident {
   resolvedAt?: string | null;
   updatedAt?: string;
   events?: IncidentEvent[];
+  postmortem?: Postmortem | null;
 }
 
 export interface IncidentNotificationPayload {
@@ -28,6 +30,19 @@ export interface IncidentNotificationPayload {
   title: string;
   severity: Incident["severity"];
   serviceName: string;
+}
+
+export interface IncidentUpdatePayload extends IncidentNotificationPayload {
+  status: Incident["status"];
+  currentAssigneeId?: string | null;
+  currentAssigneeName?: string | null;
+  escalationStepIndex?: number;
+  updateType:
+    | "CREATED"
+    | "ESCALATED"
+    | "ACKNOWLEDGED"
+    | "RESOLVED"
+    | "COMMENTED";
 }
 
 export interface IncidentEvent {

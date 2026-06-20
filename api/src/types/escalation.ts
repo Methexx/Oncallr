@@ -13,3 +13,16 @@ export interface IncidentNotificationPayload {
   severity: IncidentSeverity;
   serviceName: string;
 }
+
+export interface IncidentUpdatePayload extends IncidentNotificationPayload {
+  status: "TRIGGERED" | "ACKNOWLEDGED" | "RESOLVED";
+  currentAssigneeId?: string | null;
+  currentAssigneeName?: string | null;
+  escalationStepIndex?: number;
+  updateType:
+    | "CREATED"
+    | "ESCALATED"
+    | "ACKNOWLEDGED"
+    | "RESOLVED"
+    | "COMMENTED";
+}

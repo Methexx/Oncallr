@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
-import { UserRole } from "@prisma/client";
+import { IncidentSeverity, UserRole } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { createIncident } from "../../services/incident-service";
 import { AuthTokenPayload } from "../../types/auth";
 
 const createServiceSchema = z.object({
@@ -11,6 +12,12 @@ const createServiceSchema = z.object({
 
 const serviceParamsSchema = z.object({
   serviceId: z.string().uuid(),
+});
+
+const createManualIncidentSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(5_000).optional(),
+  severity: z.nativeEnum(IncidentSeverity),
 });
 
 export const serviceRoutes: FastifyPluginAsync = async (app) => {
@@ -99,6 +106,49 @@ export const serviceRoutes: FastifyPluginAsync = async (app) => {
 
       return reply.code(201).send({
         service,
+      });
+    }
+  );
+
+  app.post(
+    "/:serviceId/incidents",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+
+      if (authUser.role !== UserRole.ADMIN) {
+        return reply.code(403).send({
+          message: "Only admins can trigger incidents manually.",
+        });
+      }
+
+      const { serviceId } = serviceParamsSchema.parse(request.params);
+      const body = createManualIncidentSchema.parse(request.body);
+
+      const service = await app.prisma.service.findUnique({
+        where: {
+          id: serviceId,
+        },
+      });
+
+      if (!service) {
+        return reply.code(404).send({
+          message: "Service not found.",
+        });
+      }
+
+      const incident = await createIncident(app, {
+        serviceId,
+        title: body.title,
+        description: body.description,
+        severity: body.severity,
+        source: "manual",
+      });
+
+      return reply.code(201).send({
+        incident,
       });
     }
   );

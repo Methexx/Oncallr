@@ -99,6 +99,7 @@ export function SchedulesView() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [timeZone, setTimeZone] = useState("UTC");
+  const [rotationLengthDays, setRotationLengthDays] = useState("7");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const isAdmin = auth.user?.role === "ADMIN";
 
@@ -121,6 +122,7 @@ export function SchedulesView() {
     onSuccess: async () => {
       setName("");
       setTimeZone("UTC");
+      setRotationLengthDays("7");
       setSelectedUserIds([]);
       toast.success("Schedule created.");
       await queryClient.invalidateQueries({
@@ -197,6 +199,18 @@ export function SchedulesView() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="schedule-rotation-length">Rotation length (days)</Label>
+              <Input
+                disabled={!isAdmin || createScheduleMutation.isPending}
+                id="schedule-rotation-length"
+                min={1}
+                onChange={(event) => setRotationLengthDays(event.target.value)}
+                type="number"
+                value={rotationLengthDays}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>Rotation members</Label>
               {usersQuery.isLoading ? (
                 <div className="space-y-2">
@@ -257,12 +271,14 @@ export function SchedulesView() {
                 createScheduleMutation.isPending ||
                 name.trim().length < 2 ||
                 timeZone.trim().length < 2 ||
+                Number(rotationLengthDays) < 1 ||
                 selectedUserIds.length === 0
               }
               onClick={() =>
                 createScheduleMutation.mutate({
                   name: name.trim(),
                   timeZone: timeZone.trim(),
+                  rotationLengthDays: Number(rotationLengthDays),
                   members: selectedUserIds.map((userId) => ({ userId })),
                 })
               }

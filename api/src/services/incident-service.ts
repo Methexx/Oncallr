@@ -11,9 +11,10 @@ interface CreateIncidentInput {
   title: string;
   description?: string;
   severity: IncidentSeverity;
+  source?: "webhook" | "manual";
 }
 
-export async function createIncidentFromWebhook(
+export async function createIncident(
   app: FastifyInstance,
   input: CreateIncidentInput
 ) {
@@ -32,7 +33,10 @@ export async function createIncidentFromWebhook(
       data: {
         incidentId: createdIncident.id,
         type: IncidentEventType.CREATED,
-        message: "Incident created from webhook ingestion.",
+        message:
+          input.source === "manual"
+            ? "Incident created manually from the dashboard."
+            : "Incident created from webhook ingestion.",
       },
     });
 
@@ -42,4 +46,14 @@ export async function createIncidentFromWebhook(
   await triggerInitialEscalation(app, incident.id);
 
   return incident;
+}
+
+export async function createIncidentFromWebhook(
+  app: FastifyInstance,
+  input: Omit<CreateIncidentInput, "source">
+) {
+  return createIncident(app, {
+    ...input,
+    source: "webhook",
+  });
 }

@@ -13,16 +13,21 @@ interface IncidentEventResponse {
   event: IncidentEvent;
 }
 
+interface IncidentListFilters {
+  status?: "TRIGGERED" | "ACKNOWLEDGED" | "RESOLVED";
+  serviceId?: string;
+  assigneeId?: string;
+  search?: string;
+}
+
 export async function getMyIncidents() {
   const { data } = await apiClient.get<MyIncidentsResponse>("/incidents/my");
   return data.incidents;
 }
 
-export async function getAllIncidents(
-  status?: "TRIGGERED" | "ACKNOWLEDGED" | "RESOLVED"
-) {
+export async function getAllIncidents(filters?: IncidentListFilters) {
   const { data } = await apiClient.get<MyIncidentsResponse>("/incidents", {
-    params: status ? { status } : undefined,
+    params: filters,
   });
   return data.incidents;
 }
@@ -57,6 +62,13 @@ export async function resolveIncident(
   const { data } = await apiClient.post<IncidentResponse>(
     `/incidents/${incidentId}/resolve`,
     resolutionNote ? { resolutionNote } : {}
+  );
+  return data.incident;
+}
+
+export async function escalateIncidentNow(incidentId: string) {
+  const { data } = await apiClient.post<IncidentResponse>(
+    `/incidents/${incidentId}/escalate-now`
   );
   return data.incident;
 }

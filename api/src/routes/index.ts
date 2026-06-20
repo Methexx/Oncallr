@@ -3,6 +3,7 @@ import { analyticsRoutes } from "./analytics";
 import { authRoutes } from "./auth";
 import { escalationPolicyRoutes } from "./escalation-policies";
 import { incidentRoutes } from "./incidents";
+import { postmortemRoutes } from "./postmortems";
 import { scheduleRoutes } from "./schedules";
 import { serviceRoutes } from "./services";
 import { userRoutes } from "./users";
@@ -23,6 +24,10 @@ export const appRoutes: FastifyPluginAsync = async (app) => {
 
   await app.register(incidentRoutes, {
     prefix: "/api/incidents",
+  });
+
+  await app.register(postmortemRoutes, {
+    prefix: "/api/postmortems",
   });
 
   await app.register(userRoutes, {

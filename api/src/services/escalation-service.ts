@@ -6,8 +6,16 @@ import {
 } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 import { EscalationJobData } from "../jobs/escalation-queue";
-import { emitIncidentNotification } from "./socket-service";
-import { EscalationStep } from "../types/escalation";
+import {
+  emitIncidentNotification,
+  emitIncidentUpdate,
+  hasActiveUserSocket,
+} from "./socket-service";
+import {
+  EscalationStep,
+  IncidentUpdatePayload,
+} from "../types/escalation";
+import { sendIncidentFallbackEmail } from "./email-service";
 
 interface ResolvedEscalationTarget {
   step: EscalationStep;
@@ -110,8 +118,19 @@ async function notifyIncidentAssignee(
   incident: Incident,
   serviceName: string,
   userId: string,
-  eventMessage: string
+  eventMessage: string,
+  stepNumber: number
 ) {
+  const recipient = await app.prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      email: true,
+      name: true,
+    },
+  });
+
   emitIncidentNotification(app, userId, {
     incidentId: incident.id,
     title: incident.title,
@@ -127,6 +146,38 @@ async function notifyIncidentAssignee(
       message: eventMessage,
     },
   });
+
+  if (recipient && !hasActiveUserSocket(app, userId)) {
+    await sendIncidentFallbackEmail(app, {
+      email: recipient.email,
+      name: recipient.name,
+      incidentTitle: incident.title,
+      severity: incident.severity,
+      serviceName,
+      incidentId: incident.id,
+      stepNumber,
+    });
+  }
+}
+
+function buildIncidentUpdatePayload(input: {
+  incident: Pick<Incident, "id" | "title" | "severity" | "status" | "escalationStepIndex">;
+  serviceName: string;
+  currentAssigneeId?: string | null;
+  currentAssigneeName?: string | null;
+  updateType: IncidentUpdatePayload["updateType"];
+}): IncidentUpdatePayload {
+  return {
+    incidentId: input.incident.id,
+    title: input.incident.title,
+    severity: input.incident.severity,
+    serviceName: input.serviceName,
+    status: input.incident.status,
+    currentAssigneeId: input.currentAssigneeId,
+    currentAssigneeName: input.currentAssigneeName,
+    escalationStepIndex: input.incident.escalationStepIndex,
+    updateType: input.updateType,
+  };
 }
 
 export async function triggerInitialEscalation(
@@ -186,7 +237,26 @@ export async function triggerInitialEscalation(
     incident,
     incident.service.name,
     target.userId,
-    "Initial on-call engineer notified."
+    "Initial on-call engineer notified.",
+    1
+  );
+
+  emitIncidentUpdate(
+    app,
+    buildIncidentUpdatePayload({
+      incident: {
+        ...incident,
+        status: IncidentStatus.TRIGGERED,
+        escalationStepIndex: 0,
+      },
+      serviceName: incident.service.name,
+      currentAssigneeId: target.userId,
+      updateType: "CREATED",
+    }),
+    {
+      userIds: [target.userId],
+      includeAdmins: true,
+    }
   );
 
   await scheduleEscalationCheck(
@@ -198,7 +268,10 @@ export async function triggerInitialEscalation(
 
 export async function processEscalationJob(
   app: FastifyInstance,
-  data: EscalationJobData
+  data: EscalationJobData,
+  options?: {
+    skipReschedule?: boolean;
+  }
 ) {
   const incident = await app.prisma.incident.findUnique({
     where: {
@@ -241,10 +314,13 @@ export async function processEscalationJob(
       },
     });
 
-    await scheduleEscalationCheck(app, incident, policy.timeoutMinutes);
+    if (!options?.skipReschedule) {
+      await scheduleEscalationCheck(app, incident, policy.timeoutMinutes);
+    }
     return;
   }
 
+  const previousAssigneeId = incident.currentAssigneeId;
   await app.prisma.$transaction([
     app.prisma.incident.update({
       where: {
@@ -270,8 +346,39 @@ export async function processEscalationJob(
     incident,
     incident.service.name,
     target.userId,
-    `Engineer notified for escalation step ${nextIndex + 1}.`
+    `Engineer notified for escalation step ${nextIndex + 1}.`,
+    nextIndex + 1
   );
 
-  await scheduleEscalationCheck(app, incident, policy.timeoutMinutes);
+  const assignee = await app.prisma.user.findUnique({
+    where: {
+      id: target.userId,
+    },
+    select: {
+      name: true,
+    },
+  });
+
+  emitIncidentUpdate(
+    app,
+    buildIncidentUpdatePayload({
+      incident: {
+        ...incident,
+        status: IncidentStatus.TRIGGERED,
+        escalationStepIndex: nextIndex,
+      },
+      serviceName: incident.service.name,
+      currentAssigneeId: target.userId,
+      currentAssigneeName: assignee?.name ?? null,
+      updateType: "ESCALATED",
+    }),
+    {
+      userIds: [previousAssigneeId, target.userId],
+      includeAdmins: true,
+    }
+  );
+
+  if (!options?.skipReschedule) {
+    await scheduleEscalationCheck(app, incident, policy.timeoutMinutes);
+  }
 }

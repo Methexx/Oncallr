@@ -22,7 +22,10 @@ import {
   acknowledgeIncident,
   getMyIncidents,
 } from "@/services/incidents";
-import { IncidentNotificationPayload } from "@/types/incident";
+import {
+  IncidentNotificationPayload,
+  IncidentUpdatePayload,
+} from "@/types/incident";
 
 function formatSeverity(severity: string) {
   return severity.charAt(0) + severity.slice(1).toLowerCase();
@@ -74,6 +77,25 @@ export function DashboardOverview() {
     }
   );
 
+  const handleIncidentUpdated = useEffectEvent(
+    (payload: IncidentUpdatePayload) => {
+      if (payload.updateType === "ESCALATED") {
+        toast.info(`Incident escalated for ${payload.serviceName}.`, {
+          description: `${payload.title} is now assigned to ${payload.currentAssigneeName ?? "a new responder"}.`,
+        });
+      }
+
+      startTransition(() => {
+        void queryClient.invalidateQueries({
+          queryKey: ["incidents", "my"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["incidents"],
+        });
+      });
+    }
+  );
+
   useEffect(() => {
     if (auth.isUnauthorized || incidentsError?.response?.status === 401) {
       router.replace("/login");
@@ -88,11 +110,16 @@ export function DashboardOverview() {
     const onIncidentCreated = (payload: IncidentNotificationPayload) => {
       handleIncidentCreated(payload);
     };
+    const onIncidentUpdated = (payload: IncidentUpdatePayload) => {
+      handleIncidentUpdated(payload);
+    };
 
     socket.on("incident:new", onIncidentCreated);
+    socket.on("incident:update", onIncidentUpdated);
 
     return () => {
       socket.off("incident:new", onIncidentCreated);
+      socket.off("incident:update", onIncidentUpdated);
     };
   }, [isAuthenticated, socket]);
 

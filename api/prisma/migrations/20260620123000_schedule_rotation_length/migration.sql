@@ -1,0 +1,2 @@
+ALTER TABLE "Schedule"
+ADD COLUMN "rotationLengthDays" INTEGER NOT NULL DEFAULT 7;

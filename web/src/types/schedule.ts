@@ -4,6 +4,7 @@ export interface Schedule {
   id: string;
   name: string;
   timeZone: string;
+  rotationLengthDays: number;
   createdAt: string;
   updatedAt?: string;
   members: Array<{

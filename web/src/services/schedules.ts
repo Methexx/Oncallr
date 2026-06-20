@@ -12,9 +12,14 @@ interface ScheduleResponse {
 interface CreateScheduleInput {
   name: string;
   timeZone: string;
+  rotationLengthDays: number;
   members: Array<{
     userId: string;
   }>;
+}
+
+interface UpdateScheduleInput extends CreateScheduleInput {
+  scheduleId: string;
 }
 
 export async function getSchedules() {
@@ -29,5 +34,18 @@ export async function createSchedule(input: CreateScheduleInput) {
 
 export async function getScheduleDetails(scheduleId: string) {
   const { data } = await apiClient.get<ScheduleResponse>(`/schedules/${scheduleId}`);
+  return data.schedule;
+}
+
+export async function updateSchedule(input: UpdateScheduleInput) {
+  const { data } = await apiClient.put<ScheduleResponse>(
+    `/schedules/${input.scheduleId}`,
+    {
+      name: input.name,
+      timeZone: input.timeZone,
+      rotationLengthDays: input.rotationLengthDays,
+      members: input.members,
+    }
+  );
   return data.schedule;
 }

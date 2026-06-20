@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,10 +16,21 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
-import { createService, getServices } from "@/services/services";
+import {
+  createService,
+  getServices,
+  triggerServiceIncident,
+} from "@/services/services";
 import { Service } from "@/types/service";
 
 function formatDate(value: string) {
@@ -94,6 +103,12 @@ export function ServicesView() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [incidentTitle, setIncidentTitle] = useState("");
+  const [incidentDescription, setIncidentDescription] = useState("");
+  const [incidentSeverity, setIncidentSeverity] = useState<
+    "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  >("HIGH");
   const isAdmin = auth.user?.role === "ADMIN";
 
   const servicesQuery = useQuery({
@@ -123,6 +138,37 @@ export function ServicesView() {
     },
   });
 
+  const triggerIncidentMutation = useMutation({
+    mutationFn: triggerServiceIncident,
+    onSuccess: async (incident) => {
+      setSelectedServiceId("");
+      setIncidentTitle("");
+      setIncidentDescription("");
+      setIncidentSeverity("HIGH");
+      toast.success("Incident triggered manually.");
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["services"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["incidents"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["incidents", "my"],
+        }),
+      ]);
+      void navigator.clipboard?.writeText(incident.id).catch(() => undefined);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof AxiosError
+          ? error.response?.data?.message ?? "Unable to trigger incident."
+          : "Unable to trigger incident.";
+
+      toast.error(message);
+    },
+  });
+
   return (
     <section className="space-y-6">
       <div className="space-y-2">
@@ -133,57 +179,162 @@ export function ServicesView() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[0.95fr_1.35fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create service</CardTitle>
-            <CardDescription>
-              Admins can create new monitored services and reveal their webhook URLs.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!isAdmin ? (
-              <p className="text-sm text-muted-foreground">
-                You are signed in as an engineer, so this panel is read-only.
-              </p>
-            ) : null}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create service</CardTitle>
+              <CardDescription>
+                Admins can create new monitored services and reveal their webhook URLs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAdmin ? (
+                <p className="text-sm text-muted-foreground">
+                  You are signed in as an engineer, so this panel is read-only.
+                </p>
+              ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="service-name">Service name</Label>
-              <Input
-                disabled={!isAdmin || createServiceMutation.isPending}
-                id="service-name"
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Payment API"
-                value={name}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-name">Service name</Label>
+                <Input
+                  disabled={!isAdmin || createServiceMutation.isPending}
+                  id="service-name"
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Payment API"
+                  value={name}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="service-description">Description</Label>
-              <Textarea
-                disabled={!isAdmin || createServiceMutation.isPending}
-                id="service-description"
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Processes checkout and payment requests."
-                value={description}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-description">Description</Label>
+                <Textarea
+                  disabled={!isAdmin || createServiceMutation.isPending}
+                  id="service-description"
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Processes checkout and payment requests."
+                  value={description}
+                />
+              </div>
 
-            <Button
-              className="w-full"
-              disabled={!isAdmin || createServiceMutation.isPending || name.trim().length < 2}
-              onClick={() =>
-                createServiceMutation.mutate({
-                  name: name.trim(),
-                  description: description.trim() || undefined,
-                })
-              }
-              type="button"
-            >
-              {createServiceMutation.isPending ? "Creating..." : "Create service"}
-            </Button>
-          </CardContent>
-        </Card>
+              <Button
+                className="w-full"
+                disabled={!isAdmin || createServiceMutation.isPending || name.trim().length < 2}
+                onClick={() =>
+                  createServiceMutation.mutate({
+                    name: name.trim(),
+                    description: description.trim() || undefined,
+                  })
+                }
+                type="button"
+              >
+                {createServiceMutation.isPending ? "Creating..." : "Create service"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Trigger incident</CardTitle>
+              <CardDescription>
+                Create a live incident from the dashboard for demos, testing, or fire drills.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAdmin ? (
+                <p className="text-sm text-muted-foreground">
+                  Only admins can trigger incidents manually.
+                </p>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Select
+                  onValueChange={setSelectedServiceId}
+                  value={selectedServiceId}
+                >
+                  <SelectTrigger disabled={!isAdmin || triggerIncidentMutation.isPending}>
+                    <SelectValue placeholder="Choose a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(servicesQuery.data ?? []).map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="incident-title">Incident title</Label>
+                <Input
+                  disabled={!isAdmin || triggerIncidentMutation.isPending}
+                  id="incident-title"
+                  onChange={(event) => setIncidentTitle(event.target.value)}
+                  placeholder="Payment API returning 500s"
+                  value={incidentTitle}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Severity</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setIncidentSeverity(
+                      value as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+                    )
+                  }
+                  value={incidentSeverity}
+                >
+                  <SelectTrigger disabled={!isAdmin || triggerIncidentMutation.isPending}>
+                    <SelectValue placeholder="Select severity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="incident-description">Description</Label>
+                <Textarea
+                  disabled={!isAdmin || triggerIncidentMutation.isPending}
+                  id="incident-description"
+                  onChange={(event) => setIncidentDescription(event.target.value)}
+                  placeholder="Error rate spiked after the latest deploy and checkout traffic is failing."
+                  value={incidentDescription}
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                disabled={
+                  !isAdmin ||
+                  triggerIncidentMutation.isPending ||
+                  selectedServiceId.length === 0 ||
+                  incidentTitle.trim().length < 3
+                }
+                onClick={() =>
+                  triggerIncidentMutation.mutate({
+                    serviceId: selectedServiceId,
+                    title: incidentTitle.trim(),
+                    description: incidentDescription.trim() || undefined,
+                    severity: incidentSeverity,
+                  })
+                }
+                type="button"
+                variant="secondary"
+              >
+                {triggerIncidentMutation.isPending
+                  ? "Triggering..."
+                  : "Trigger incident"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
         <Card>
           <CardHeader>

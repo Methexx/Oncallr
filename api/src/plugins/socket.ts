@@ -1,5 +1,6 @@
 import fp from "fastify-plugin";
 import { parse as parseCookie } from "cookie";
+import { UserRole } from "@prisma/client";
 import { Server as SocketIOServer } from "socket.io";
 import { AuthTokenPayload } from "../types/auth";
 
@@ -38,6 +39,10 @@ export const socketPlugin = fp(async (app) => {
     }
 
     socket.join(`user:${user.sub}`);
+
+    if (user.role === UserRole.ADMIN) {
+      socket.join("admins");
+    }
   });
 
   app.decorate("io", io);

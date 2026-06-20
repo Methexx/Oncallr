@@ -1,7 +1,11 @@
 import { IncidentEventType, IncidentStatus, UserRole } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { cancelEscalationCheck } from "../../services/escalation-service";
+import {
+  cancelEscalationCheck,
+  processEscalationJob,
+} from "../../services/escalation-service";
+import { emitIncidentUpdate } from "../../services/socket-service";
 import { AuthTokenPayload } from "../../types/auth";
 
 const incidentParamsSchema = z.object({
@@ -10,6 +14,9 @@ const incidentParamsSchema = z.object({
 
 const incidentListQuerySchema = z.object({
   status: z.enum(["TRIGGERED", "ACKNOWLEDGED", "RESOLVED"]).optional(),
+  serviceId: z.string().uuid().optional(),
+  assigneeId: z.union([z.string().uuid(), z.literal("unassigned")]).optional(),
+  search: z.string().trim().max(200).optional(),
 });
 
 const incidentCommentSchema = z.object({
@@ -49,6 +56,38 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
       const incidents = await app.prisma.incident.findMany({
         where: {
           ...(query.status ? { status: query.status } : {}),
+          ...(query.serviceId ? { serviceId: query.serviceId } : {}),
+          ...(query.assigneeId
+            ? query.assigneeId === "unassigned"
+              ? { currentAssigneeId: null }
+              : { currentAssigneeId: query.assigneeId }
+            : {}),
+          ...(query.search
+            ? {
+                OR: [
+                  {
+                    title: {
+                      contains: query.search,
+                      mode: "insensitive",
+                    },
+                  },
+                  {
+                    description: {
+                      contains: query.search,
+                      mode: "insensitive",
+                    },
+                  },
+                  {
+                    service: {
+                      name: {
+                        contains: query.search,
+                        mode: "insensitive",
+                      },
+                    },
+                  },
+                ],
+              }
+            : {}),
           ...(authUser.role === UserRole.ADMIN
             ? {}
             : {
@@ -202,6 +241,14 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
         where: {
           id: incidentId,
         },
+        include: {
+          service: true,
+          currentAssignee: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
 
       if (!incident) {
@@ -238,6 +285,25 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
 
       await cancelEscalationCheck(app, incidentId);
 
+      emitIncidentUpdate(
+        app,
+        {
+          incidentId: updatedIncident.id,
+          title: updatedIncident.title,
+          severity: updatedIncident.severity,
+          serviceName: incident.service.name,
+          status: IncidentStatus.ACKNOWLEDGED,
+          currentAssigneeId: updatedIncident.currentAssigneeId,
+          currentAssigneeName: incident.currentAssignee?.name ?? null,
+          escalationStepIndex: updatedIncident.escalationStepIndex,
+          updateType: "ACKNOWLEDGED",
+        },
+        {
+          userIds: [incident.currentAssigneeId, authUser.sub],
+          includeAdmins: true,
+        }
+      );
+
       return {
         incident: updatedIncident,
       };
@@ -257,6 +323,14 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
       const incident = await app.prisma.incident.findUnique({
         where: {
           id: incidentId,
+        },
+        include: {
+          service: true,
+          currentAssignee: {
+            select: {
+              name: true,
+            },
+          },
         },
       });
 
@@ -311,6 +385,14 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
         where: {
           id: incidentId,
         },
+        include: {
+          service: true,
+          currentAssignee: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
 
       if (!incident) {
@@ -362,8 +444,83 @@ export const incidentRoutes: FastifyPluginAsync = async (app) => {
 
       await cancelEscalationCheck(app, incidentId);
 
+      emitIncidentUpdate(
+        app,
+        {
+          incidentId: updatedIncident.id,
+          title: updatedIncident.title,
+          severity: updatedIncident.severity,
+          serviceName: incident.service.name,
+          status: IncidentStatus.RESOLVED,
+          currentAssigneeId: updatedIncident.currentAssigneeId,
+          currentAssigneeName: incident.currentAssignee?.name ?? null,
+          escalationStepIndex: updatedIncident.escalationStepIndex,
+          updateType: "RESOLVED",
+        },
+        {
+          userIds: [incident.currentAssigneeId, authUser.sub],
+          includeAdmins: true,
+        }
+      );
+
       return {
         incident: updatedIncident,
+      };
+    }
+  );
+
+  app.post(
+    "/:incidentId/escalate-now",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+      const { incidentId } = incidentParamsSchema.parse(request.params);
+
+      if (authUser.role !== UserRole.ADMIN) {
+        return reply.code(403).send({
+          message: "Only admins can force an escalation step.",
+        });
+      }
+
+      const incident = await app.prisma.incident.findUnique({
+        where: {
+          id: incidentId,
+        },
+      });
+
+      if (!incident) {
+        return reply.code(404).send({
+          message: "Incident not found.",
+        });
+      }
+
+      if (incident.status !== IncidentStatus.TRIGGERED) {
+        return reply.code(400).send({
+          message: "Only triggered incidents can be escalated.",
+        });
+      }
+
+      await cancelEscalationCheck(app, incidentId);
+      await processEscalationJob(
+        app,
+        {
+          incidentId,
+        },
+        {
+          skipReschedule: false,
+        }
+      );
+
+      const refreshedIncident = await app.prisma.incident.findUnique({
+        where: {
+          id: incidentId,
+        },
+      });
+
+      return {
+        incident: refreshedIncident,
       };
     }
   );

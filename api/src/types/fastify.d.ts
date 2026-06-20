@@ -17,6 +17,13 @@ declare module "fastify" {
       jwtSecret: string;
       jwtExpiresIn: string;
       authCookieName: string;
+      smtpHost?: string;
+      smtpPort?: number;
+      smtpSecure: boolean;
+      smtpUser?: string;
+      smtpPass?: string;
+      smtpFromEmail?: string;
+      smtpFromName: string;
       databaseSslRejectUnauthorized: boolean;
     };
     prisma: PrismaClient;
