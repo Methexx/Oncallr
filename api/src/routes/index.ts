@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { analyticsRoutes } from "./analytics";
 import { authRoutes } from "./auth";
 import { escalationPolicyRoutes } from "./escalation-policies";
+import { healthRoutes } from "./health";
 import { incidentRoutes } from "./incidents";
 import { postmortemRoutes } from "./postmortems";
 import { scheduleRoutes } from "./schedules";
@@ -10,6 +11,10 @@ import { userRoutes } from "./users";
 import { webhookRoutes } from "./webhooks";
 
 export const appRoutes: FastifyPluginAsync = async (app) => {
+  await app.register(healthRoutes, {
+    prefix: "/api/health",
+  });
+
   await app.register(authRoutes, {
     prefix: "/api/auth",
   });
