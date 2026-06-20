@@ -152,4 +152,56 @@ export const serviceRoutes: FastifyPluginAsync = async (app) => {
       });
     }
   );
+
+  app.post(
+    "/:serviceId/regenerate-webhook-token",
+    {
+      preHandler: app.authenticate,
+    },
+    async (request, reply) => {
+      const authUser = request.user as AuthTokenPayload;
+
+      if (authUser.role !== UserRole.ADMIN) {
+        return reply.code(403).send({
+          message: "Only admins can regenerate webhook tokens.",
+        });
+      }
+
+      const { serviceId } = serviceParamsSchema.parse(request.params);
+
+      const service = await app.prisma.service.findUnique({
+        where: {
+          id: serviceId,
+        },
+      });
+
+      if (!service) {
+        return reply.code(404).send({
+          message: "Service not found.",
+        });
+      }
+
+      const updatedService = await app.prisma.service.update({
+        where: {
+          id: serviceId,
+        },
+        data: {
+          webhookToken: randomUUID(),
+        },
+        include: {
+          escalationPolicy: true,
+          incidents: {
+            take: 10,
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+        },
+      });
+
+      return {
+        service: updatedService,
+      };
+    }
+  );
 };
