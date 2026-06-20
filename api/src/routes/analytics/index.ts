@@ -5,6 +5,7 @@ import { AuthTokenPayload } from "../../types/auth";
 
 const analyticsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).default(30),
+  serviceId: z.string().uuid().optional(),
 });
 
 function average(values: number[]) {
@@ -38,7 +39,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const { days } = analyticsQuerySchema.parse(request.query);
+      const { days, serviceId } = analyticsQuerySchema.parse(request.query);
       const from = new Date();
       from.setDate(from.getDate() - days);
 
@@ -47,6 +48,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
           createdAt: {
             gte: from,
           },
+          ...(serviceId ? { serviceId } : {}),
         },
         include: {
           service: true,
@@ -88,6 +90,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
 
       const volumeByServiceMap = new Map<string, { serviceName: string; count: number }>();
       const incidentsOverTimeMap = new Map<string, number>();
+      const severityBreakdownMap = new Map<string, number>();
       const busiestOnCallMap = new Map<
         string,
         { scheduleName: string; userName: string; count: number }
@@ -103,6 +106,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
 
         const bucket = bucketDate(incident.createdAt);
         incidentsOverTimeMap.set(bucket, (incidentsOverTimeMap.get(bucket) ?? 0) + 1);
+        severityBreakdownMap.set(
+          incident.severity,
+          (severityBreakdownMap.get(incident.severity) ?? 0) + 1
+        );
 
         const matchingShift = shifts.find(
           (shift) =>
@@ -124,6 +131,13 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
 
       const summary = {
         days,
+        serviceFilter:
+          serviceId && incidents[0]
+            ? {
+                id: incidents[0].serviceId,
+                name: incidents[0].service.name,
+              }
+            : null,
         totals: {
           incidents: incidents.length,
           triggered: incidents.filter((incident) => incident.status === "TRIGGERED").length,
@@ -132,12 +146,16 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
         },
         mttaMinutes: average(mttaValues),
         mttrMinutes: average(mttrValues),
+        averageIncidentsPerDay: incidents.length / days,
         volumeByService: Array.from(volumeByServiceMap.values()).sort(
           (left, right) => right.count - left.count
         ),
         incidentsOverTime: Array.from(incidentsOverTimeMap.entries())
           .map(([date, count]) => ({ date, count }))
           .sort((left, right) => left.date.localeCompare(right.date)),
+        severityBreakdown: Array.from(severityBreakdownMap.entries())
+          .map(([severity, count]) => ({ severity, count }))
+          .sort((left, right) => right.count - left.count),
         busiestOnCall: Array.from(busiestOnCallMap.values())
           .sort((left, right) => right.count - left.count)
           .slice(0, 5),
