@@ -2,18 +2,11 @@
 
 import { MoonStar, SunMedium } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const isDark = mounted ? resolvedTheme === "dark" : false;
+  const isDark = resolvedTheme === "dark";
 
   return (
     <Button
@@ -24,7 +17,8 @@ export function ThemeToggle() {
       type="button"
       variant="outline"
     >
-      {isDark ? <SunMedium /> : <MoonStar />}
+      <SunMedium className="hidden dark:block" />
+      <MoonStar className="dark:hidden" />
     </Button>
   );
 }

@@ -63,14 +63,17 @@ export function LoginForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Access OnCallr</CardTitle>
+      <CardHeader className="space-y-3">
+        <div className="inline-flex w-fit rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+          Secure access
+        </div>
+        <CardTitle className="text-3xl tracking-tight">Access OnCallr</CardTitle>
         <CardDescription>
           Use a Supabase magic link to sign in or create an engineer account.
         </CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
         <Tabs defaultValue="login" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Sign in</TabsTrigger>
@@ -164,7 +167,7 @@ export function LoginForm() {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
           Magic links come from Supabase Auth. Add
           {" "}
           <span className="font-medium">http://localhost:3000/auth/callback</span>
