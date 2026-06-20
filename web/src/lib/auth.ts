@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-import { supabase } from "@/lib/supabase";
+import { assertSupabaseEnv, supabase } from "@/lib/supabase";
 import { AuthUser } from "@/types/auth";
 
 interface AuthResponse {
@@ -30,6 +30,8 @@ function getMagicLinkRedirectUrl() {
 }
 
 export async function requestLoginMagicLink(input: MagicLinkInput) {
+  assertSupabaseEnv();
+
   const { error } = await supabase.auth.signInWithOtp({
     email: input.email,
     options: {
@@ -47,6 +49,8 @@ export async function requestLoginMagicLink(input: MagicLinkInput) {
 }
 
 export async function requestRegisterMagicLink(input: RegisterInput) {
+  assertSupabaseEnv();
+
   const { error } = await supabase.auth.signInWithOtp({
     email: input.email,
     options: {
@@ -79,5 +83,8 @@ export async function getCurrentUser() {
 
 export async function logoutUser() {
   await apiClient.post("/auth/logout");
-  await supabase.auth.signOut();
+
+  if (typeof window !== "undefined") {
+    await supabase.auth.signOut();
+  }
 }

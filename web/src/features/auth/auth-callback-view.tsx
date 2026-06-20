@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { exchangeSupabaseSession } from "@/lib/auth";
 import { queryClient } from "@/lib/query-client";
-import { supabase } from "@/lib/supabase";
+import { assertSupabaseEnv, supabase } from "@/lib/supabase";
 
 export function AuthCallbackView() {
   const router = useRouter();
@@ -16,6 +16,18 @@ export function AuthCallbackView() {
     let isActive = true;
 
     async function completeSignIn() {
+      try {
+        assertSupabaseEnv();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Supabase environment variables are missing."
+        );
+        router.replace("/login");
+        return;
+      }
+
       const code = searchParams.get("code");
       const errorDescription = searchParams.get("error_description");
 
